@@ -30,9 +30,9 @@ struct TaskRow: View {
       // original widget, readable at a glance without reading the numbers.
       Image(systemName: task.running ? "circle.fill" : "circle")
         .font(.system(size: 9))
-        // Red matches the menu bar total, so "something is running" reads as
-        // one signal rather than two unrelated colors.
-        .foregroundStyle(task.running ? Color.red : .secondary)
+        // Filled vs hollow already carries the state; the color stays neutral
+        // so the list reads calmly with several timers going at once.
+        .foregroundStyle(task.running ? .primary : .secondary)
 
       Text(task.title)
         .lineLimit(1)

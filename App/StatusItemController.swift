@@ -150,27 +150,19 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
 
     guard let button = statusItem.button else { return }
 
-    // Getting a genuine red into the menu bar takes three things, and
-    // omitting any one of them silently yields the wrong color:
-    //
-    // 1. The status bar draws with a vibrant appearance, which blends the
-    //    drawn color into the menu bar backdrop — systemRed comes out amber.
-    //    Pinning .aqua while running opts out of that blending.
-    // 2. An NSStatusBarButton treats its image as a template by default and
-    //    recolors it to match the menu bar, ignoring any tint.
-    // 3. contentTintColor then colors the glyph and the title together.
-    //
-    // Idle deliberately restores the defaults (nil appearance, template image)
-    // so the item follows light/dark menu bars like every other status item.
-    button.appearance = running ? NSAppearance(named: .aqua) : nil
-    button.image?.isTemplate = !running
-    button.contentTintColor = running ? .systemRed : nil
+    // Keep the item in the menu bar's own colors: template rendering and no
+    // tint, so it adapts to light, dark and tinted menu bars like every other
+    // status item. Running is signalled by weight, not hue — a timer that is
+    // counting is not an error, and a colored menu bar item reads as one.
+    button.image?.isTemplate = true
+    button.contentTintColor = nil
     button.attributedTitle = NSAttributedString(
       string: " \(title)",
       attributes: [
         // Monospaced digits stop the width jittering as the numbers change.
-        .font: NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular),
-        .foregroundColor: running ? NSColor.systemRed : NSColor.labelColor,
+        .font: NSFont.monospacedDigitSystemFont(
+          ofSize: NSFont.systemFontSize, weight: running ? .semibold : .regular),
+        .foregroundColor: NSColor.labelColor,
       ]
     )
   }
