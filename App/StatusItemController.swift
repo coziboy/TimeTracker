@@ -48,8 +48,8 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
 
   private func configureStatusItem() {
     guard let button = statusItem.button else { return }
-    button.image = NSImage(
-      systemSymbolName: "timer", accessibilityDescription: "TimeTracker")
+    // The glyph itself is set in `updateTitle`, because it changes with the
+    // running state.
     button.imagePosition = .imageLeading
     button.target = self
     button.action = #selector(togglePopover)
@@ -150,18 +150,21 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
 
     guard let button = statusItem.button else { return }
 
-    // Keep the item in the menu bar's own colors: template rendering and no
-    // tint, so it adapts to light, dark and tinted menu bars like every other
-    // status item. Running is signalled by weight, not hue — a timer that is
-    // counting is not an error, and a colored menu bar item reads as one.
-    button.image?.isTemplate = true
+    // Running is signalled by the glyph — filled while counting, outline when
+    // idle — matching the popover's filled/hollow row dot. Color stays out of
+    // it: a counting timer is not an error, and template rendering with no
+    // tint lets the item follow light, dark and tinted menu bars like every
+    // other status item.
+    let symbol = running ? "timer.circle.fill" : "timer"
+    let image = NSImage(systemSymbolName: symbol, accessibilityDescription: "TimeTracker")
+    image?.isTemplate = true
+    button.image = image
     button.contentTintColor = nil
     button.attributedTitle = NSAttributedString(
       string: " \(title)",
       attributes: [
         // Monospaced digits stop the width jittering as the numbers change.
-        .font: NSFont.monospacedDigitSystemFont(
-          ofSize: NSFont.systemFontSize, weight: running ? .semibold : .regular),
+        .font: NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular),
         .foregroundColor: NSColor.labelColor,
       ]
     )
