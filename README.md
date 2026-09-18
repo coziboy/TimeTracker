@@ -16,6 +16,17 @@ xcodegen generate                     # writes TimeTracker.xcodeproj
 xcodebuild -project TimeTracker.xcodeproj -scheme TimeTracker -configuration Debug build
 ```
 
+### A note on Xcode 27 build noise
+
+Running `xcodebuild` directly may print a long `DVTCoreDeviceCore` plug-in
+load failure (`Symbol not found: ...CoreDevice...`). That is a fault in the
+Xcode installation — a stale `CoreDevice.framework` in
+`/Library/Developer/PrivateFrameworks/` disagreeing with the one inside
+`Xcode.app` — and it concerns device discovery for iPhones and simulators.
+Building a local Mac app does not use it, so the build succeeds regardless.
+`install.sh` hides it; check for `** BUILD SUCCEEDED` if running xcodebuild
+by hand.
+
 ### Running it without Xcode
 
 `./install.sh` builds a Release copy, installs it to `/Applications` and

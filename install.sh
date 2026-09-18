@@ -12,8 +12,20 @@ echo "==> Generating project"
 xcodegen generate
 
 echo "==> Building"
-xcodebuild -project TimeTracker.xcodeproj -scheme TimeTracker -configuration Release build \
-  | grep -E "^\*\* BUILD" || { echo "build failed"; exit 1; }
+# Xcode 27 spews DVTCoreDeviceCore plug-in load failures on stderr — a broken
+# device-discovery plug-in in the Xcode install itself. It plays no part in
+# building a local Mac app, so the log goes to a file and only real
+# diagnostics plus the result are shown.
+LOG=$(mktemp -t timetracker-build)
+if ! xcodebuild -project TimeTracker.xcodeproj -scheme TimeTracker \
+     -configuration Release build > "$LOG" 2>&1; then
+  echo "Build failed:"
+  grep -E "error: " "$LOG" | grep -vE "DVTPlugIn|CoreDevice|DVTAssertions" | head -20
+  echo "(full log: $LOG)"
+  exit 1
+fi
+grep -E "^\*\* BUILD" "$LOG"
+rm -f "$LOG"
 
 BUILT=$(xcodebuild -project TimeTracker.xcodeproj -scheme TimeTracker -configuration Release \
   -showBuildSettings 2>/dev/null | awk '/ BUILT_PRODUCTS_DIR/{print $3}')/TimeTracker.app
