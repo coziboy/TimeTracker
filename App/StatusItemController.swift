@@ -149,16 +149,30 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     lastRunning = running
 
     guard let button = statusItem.button else { return }
-    // A plain attributed string, set once per second at most. Monospaced
-    // digits stop the width jittering as the numbers change.
+
+    // Getting a genuine red into the menu bar takes three things, and
+    // omitting any one of them silently yields the wrong color:
+    //
+    // 1. The status bar draws with a vibrant appearance, which blends the
+    //    drawn color into the menu bar backdrop — systemRed comes out amber.
+    //    Pinning .aqua while running opts out of that blending.
+    // 2. An NSStatusBarButton treats its image as a template by default and
+    //    recolors it to match the menu bar, ignoring any tint.
+    // 3. contentTintColor then colors the glyph and the title together.
+    //
+    // Idle deliberately restores the defaults (nil appearance, template image)
+    // so the item follows light/dark menu bars like every other status item.
+    button.appearance = running ? NSAppearance(named: .aqua) : nil
+    button.image?.isTemplate = !running
+    button.contentTintColor = running ? .systemRed : nil
     button.attributedTitle = NSAttributedString(
       string: " \(title)",
       attributes: [
+        // Monospaced digits stop the width jittering as the numbers change.
         .font: NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular),
         .foregroundColor: running ? NSColor.systemRed : NSColor.labelColor,
       ]
     )
-    button.contentTintColor = running ? .systemRed : nil
   }
 
   // MARK: - Keyboard
