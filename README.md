@@ -16,7 +16,31 @@ xcodegen generate                     # writes TimeTracker.xcodeproj
 xcodebuild -project TimeTracker.xcodeproj -scheme TimeTracker -configuration Debug build
 ```
 
-Or open it and press Run:
+### Running it without Xcode
+
+`./install.sh` builds a Release copy, installs it to `/Applications` and
+launches it. That is also what makes Launch at Login work — macOS will not
+register a login item for an app running out of a build folder.
+
+```bash
+./install.sh
+```
+
+After that it behaves like any other app: Spotlight, Launchpad, or
+
+```bash
+open -a TimeTracker
+```
+
+To run a Debug build in place without installing:
+
+```bash
+open "$(xcodebuild -project TimeTracker.xcodeproj -scheme TimeTracker \
+  -configuration Debug -showBuildSettings 2>/dev/null \
+  | awk '/ BUILT_PRODUCTS_DIR/{print $3}')/TimeTracker.app"
+```
+
+Or open the project and press Run:
 
 ```bash
 open TimeTracker.xcodeproj
