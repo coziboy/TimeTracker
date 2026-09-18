@@ -100,10 +100,12 @@ Esc cancels, and only ⌘N and ⌘Q still act as shortcuts.
 
 The gear menu has a Launch at Login toggle, backed by `SMAppService`.
 
-It is disabled for a build run straight out of DerivedData — macOS has no
-registration record for an app in a build folder, so the status reads
-`.notFound`. Copy `TimeTracker.app` to `/Applications` and launch it from there
-and the toggle works. If macOS asks for approval, the menu links to
+`SMAppService` registers whichever bundle is running, so the login item points
+at the copy you launched. Toggle it from `/Applications/TimeTracker.app` and
+that is the copy macOS will start at login — turn it on from a DerivedData
+build and macOS will faithfully launch the build folder instead.
+
+If macOS asks for approval, the menu links to
 System Settings › General › Login Items.
 
 ## Where the data lives
