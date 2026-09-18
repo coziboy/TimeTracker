@@ -1,0 +1,45 @@
+name: TimeTracker
+
+options:
+  bundleIdPrefix: dev.andreas          # placeholder, change freely
+  deploymentTarget: { macOS: "14.0" }
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    CODE_SIGN_STYLE: Automatic
+    # Ad-hoc signing so `xcodebuild` works without an Apple Developer team.
+    # Pick a real Team in Xcode's Signing & Capabilities when you want one.
+    CODE_SIGN_IDENTITY: "-"
+    ENABLE_HARDENED_RUNTIME: YES
+
+packages:
+  TimeTrackerCore:
+    path: Packages/TimeTrackerCore
+
+targets:
+  TimeTracker:
+    type: application
+    platform: macOS
+    sources: [App]
+    dependencies:
+      - package: TimeTrackerCore
+    info:
+      path: App/Info.plist
+      properties:
+        # LSUIElement makes this an "agent" app: menu bar only, no Dock icon.
+        LSUIElement: true
+        NSPrincipalClass: NSApplication
+        CFBundleName: TimeTracker
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+
+schemes:
+  TimeTracker:
+    build:
+      targets:
+        TimeTracker: all
+    run:
+      config: Debug
