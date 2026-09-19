@@ -23,6 +23,12 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
   /// The local key-down monitor, installed only while the popover is shown.
   private var keyMonitor: Any?
 
+  /// Explicit outside-click monitors. NSPopover's transient behavior handles
+  /// most cases, but an agent app can remain active while another window is
+  /// clicked, so keeping these monitors makes dismissal deterministic.
+  private var localClickMonitor: Any?
+  private var globalClickMonitor: Any?
+
   /// The last title string pushed to the status item, so we can skip redundant
   /// updates — rebuilding the attributed string every second regardless was
   /// what made the SwiftUI version burn CPU.
@@ -90,6 +96,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     popover.contentViewController?.view.window?.makeKey()
 
     installKeyMonitor()
+    installOutsideClickMonitors()
     updateClockPolicy()
   }
 
@@ -101,8 +108,72 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
   // teardown lives here rather than only in `close()`.
   func popoverDidClose(_ notification: Notification) {
     removeKeyMonitor()
+    removeOutsideClickMonitors()
     store.cancelEdit()
     updateClockPolicy()
+  }
+
+  // MARK: - Outside clicks
+
+  private func installOutsideClickMonitors() {
+    guard localClickMonitor == nil, globalClickMonitor == nil else { return }
+
+    let mouseDown: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+
+    localClickMonitor = NSEvent.addLocalMonitorForEvents(matching: mouseDown) {
+      [weak self] event in
+      guard let self else { return event }
+      MainActor.assumeIsolated {
+        if !self.isInsidePopoverOrStatusItem(event) {
+          self.close()
+        }
+      }
+      return event
+    }
+
+    globalClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: mouseDown) { [weak self] _ in
+      MainActor.assumeIsolated {
+        self?.close()
+      }
+    }
+  }
+
+  private func removeOutsideClickMonitors() {
+    if let localClickMonitor {
+      NSEvent.removeMonitor(localClickMonitor)
+      self.localClickMonitor = nil
+    }
+    if let globalClickMonitor {
+      NSEvent.removeMonitor(globalClickMonitor)
+      self.globalClickMonitor = nil
+    }
+  }
+
+  private func isInsidePopoverOrStatusItem(_ event: NSEvent) -> Bool {
+    // NSMenu uses its own pop-up window while it is tracking. Treating that
+    // window as an outside click would close the popover on the gear's first
+    // click and leave the menu unusable.
+    if event.window?.level == .popUpMenu {
+      return true
+    }
+
+    if let popoverWindow = popover.contentViewController?.view.window,
+      event.window === popoverWindow
+    {
+      return true
+    }
+
+    // Clicking the status item is an intentional toggle, so let its action
+    // handle the close instead of closing first and immediately reopening it.
+    if let button = statusItem.button,
+      let buttonWindow = button.window,
+      event.window === buttonWindow,
+      button.frame.contains(event.locationInWindow)
+    {
+      return true
+    }
+
+    return false
   }
 
   // MARK: - Clock policy
@@ -216,9 +287,14 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
       guard let id = store.selectedID else { return true }
       store.toggle(id)
       updateClockPolicy()
+    case .resetSelected:
+      guard let id = store.selectedID else { return true }
+      store.reset(id)
+      updateClockPolicy()
     case .editSelected:
       guard let id = store.selectedID else { return true }
       store.beginEdit(id)
+      updateClockPolicy()
     case .deleteSelected:
       guard let id = store.selectedID else { return true }
       store.delete(id)

@@ -153,8 +153,21 @@ public final class TaskStore {
   }
 
   /// Opens the editor on a task.
+  ///
+  /// Editing is also a pause action for a running timer. Bank the elapsed
+  /// time before replacing the row with the editor so the duration field
+  /// starts at the exact value the user saw, and so time cannot continue to
+  /// accrue while the entry is being changed.
   public func beginEdit(_ id: UUID) {
+    guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
+
     selectedID = id
+    if tasks[index].running {
+      tasks[index].seconds = elapsedSeconds(tasks[index], nowMs: now())
+      tasks[index].running = false
+      tasks[index].startedAt = 0
+      save()
+    }
     editingID = id
   }
 

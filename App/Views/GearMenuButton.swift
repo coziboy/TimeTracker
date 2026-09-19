@@ -19,7 +19,11 @@ struct GearMenuButton: NSViewRepresentable {
     button.imagePosition = .imageOnly
     button.target = context.coordinator
     button.action = #selector(Coordinator.showMenu(_:))
+    // Open on mouse-down so the first click is not lost while the transient
+    // popover transfers event tracking to the NSMenu.
+    button.sendAction(on: [.leftMouseDown])
     button.toolTip = "Settings"
+    button.setAccessibilityLabel("Settings")
     // Stops Space and Return from activating this instead of the selected row.
     button.refusesFirstResponder = true
     return button
@@ -67,7 +71,7 @@ struct GearMenuButton: NSViewRepresentable {
       // Shortcuts live here because the plan dropped the help overlay; this is
       // the one place a user is likely to go looking for them.
       let shortcuts = NSMenuItem(
-        title: "↑↓ select · Space start/stop · ⏎ edit · ⌫ delete · ⌘N add",
+        title: "↑↓ select · Space start/stop · R reset · ⏎ edit · ⌫ delete · ⌘N add",
         action: nil, keyEquivalent: "")
       shortcuts.isEnabled = false
       menu.addItem(shortcuts)

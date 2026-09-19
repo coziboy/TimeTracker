@@ -87,6 +87,7 @@ stored time alone, so a typo never destroys tracked hours.
 |---|---|
 | ↓ / ↑ | Select next / previous task |
 | Space | Start or stop the selected task |
+| R | Reset the selected task |
 | Return | Edit the selected task |
 | Delete | Delete the selected task |
 | ⌘N | Add a task and start editing it |

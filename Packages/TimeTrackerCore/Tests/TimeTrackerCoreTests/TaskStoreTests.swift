@@ -163,6 +163,34 @@ struct DeleteTests {
 @Suite("TaskStore.commitEdit")
 @MainActor
 struct CommitEditTests {
+  @Test("beginning an edit pauses a running task at its current elapsed time")
+  func pausesRunningTask() {
+    let (store, clock, _) = makeStore(tasks: [TrackedTask(title: "A", seconds: 5)])
+    let id = store.tasks[0].id
+    store.toggle(id)
+    clock.advance(ms: 10_000)
+
+    store.beginEdit(id)
+
+    #expect(store.tasks[0].seconds == 15)
+    #expect(store.tasks[0].running == false)
+    #expect(store.tasks[0].startedAt == 0)
+    #expect(store.editingID == id)
+    #expect(elapsedSeconds(store.tasks[0], nowMs: clock.now) == 15)
+  }
+
+  @Test("beginning an edit on a stopped task preserves its time")
+  func preservesStoppedTask() {
+    let (store, _, _) = makeStore(tasks: [TrackedTask(title: "A", seconds: 42)])
+    let id = store.tasks[0].id
+
+    store.beginEdit(id)
+
+    #expect(store.tasks[0].seconds == 42)
+    #expect(store.tasks[0].running == false)
+    #expect(store.editingID == id)
+  }
+
   @Test("editing a running task rebases startedAt so the new duration is the baseline")
   func rebasesRunningTask() {
     let (store, clock, _) = makeStore(tasks: [TrackedTask(title: "A")])

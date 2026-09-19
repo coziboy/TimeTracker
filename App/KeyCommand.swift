@@ -8,6 +8,7 @@ enum KeyCommand {
   case moveDown
   case moveUp
   case toggleSelected
+  case resetSelected
   case editSelected
   case deleteSelected
   case addTask
@@ -39,6 +40,11 @@ enum KeyCommand {
     guard !event.modifierFlags.contains(.option),
       !event.modifierFlags.contains(.control)
     else { return nil }
+
+    if event.charactersIgnoringModifiers?.lowercased() == "r" {
+      self = .resetSelected
+      return
+    }
 
     switch event.keyCode {
     case 125: self = .moveDown       // down arrow

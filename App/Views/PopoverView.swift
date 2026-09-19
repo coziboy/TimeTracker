@@ -81,7 +81,10 @@ struct PopoverView: View {
           store.reset(task.id)
           controller.updateClockPolicy()
         },
-        onEdit: { store.beginEdit(task.id) },
+        onEdit: {
+          store.beginEdit(task.id)
+          controller.updateClockPolicy()
+        },
         onDelete: {
           store.delete(task.id)
           controller.updateClockPolicy()
