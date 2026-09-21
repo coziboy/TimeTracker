@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import TimeTrackerCore
 
@@ -61,9 +62,34 @@ struct InlineEditor: View {
         focusedField = .title
       }
     }
+    .onChange(of: focusedField) { _, newField in
+      // Duration edits are normally replacements (the field is seeded with a
+      // complete HH:MM:SS value). Selecting it on entry means the common
+      // "click, type, Return" path takes one gesture instead of requiring
+      // Cmd-A first. The next run-loop turn is important: AppKit installs its
+      // field editor after SwiftUI publishes the focus change.
+      guard newField == .duration else { return }
+      DispatchQueue.main.async {
+        selectDurationText()
+      }
+    }
   }
 
   private func commit() {
     onCommit(title, duration)
+  }
+
+  private func selectDurationText() {
+    guard focusedField == .duration,
+      let responder = NSApp.keyWindow?.firstResponder
+    else { return }
+
+    // NSTextField edits through a shared NSTextView field editor. Supporting
+    // both responders keeps this working across AppKit's focus transitions.
+    if let editor = responder as? NSTextView {
+      editor.selectAll(nil)
+    } else if let field = responder as? NSTextField {
+      field.selectText(nil)
+    }
   }
 }

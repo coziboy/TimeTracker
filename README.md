@@ -81,6 +81,10 @@ accepts `HH:MM:SS`, `MM:SS`, plain seconds, or unit form like `1h30m`, `45m`,
 `90s` — case-insensitive, spaces allowed. Input that cannot be parsed leaves the
 stored time alone, so a typo never destroys tracked hours.
 
+For quick duration edits, focusing the duration field selects its current value;
+type the replacement and press Return to commit. Compact inputs such as `90`,
+`1:30`, and `1h30m` are accepted.
+
 ### Keyboard
 
 | Key | Does |
