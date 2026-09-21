@@ -22,6 +22,12 @@ public final class TaskStore {
   /// The row currently showing the inline editor, if any.
   public var editingID: UUID?
 
+  /// A running task is banked and temporarily paused while it is edited.
+  /// This is intentionally transient: it lets commit/cancel resume only a
+  /// task that was running before editing, without changing the persisted
+  /// task model or treating a user-stopped task as resumable.
+  private var pausedEditingID: UUID?
+
   private let persistence: any TaskPersisting
   /// Injectable "now" in epoch milliseconds, so tests control time exactly.
   private let now: @Sendable () -> Int
@@ -59,6 +65,12 @@ public final class TaskStore {
   /// Appends a blank task, selects it, and opens its editor so the user can
   /// type a title straight away.
   public func add() {
+    // ⌘N is still available from inside the editor. Finish the previous
+    // edit's temporary pause before replacing it with the new editor.
+    if editingID != nil {
+      cancelEdit()
+    }
+
     let task = TrackedTask(title: "Empty")
     tasks.append(task)
     selectedID = task.id
@@ -111,7 +123,10 @@ public final class TaskStore {
     guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
     tasks.remove(at: index)
 
-    if editingID == id { editingID = nil }
+    if editingID == id {
+      editingID = nil
+      pausedEditingID = nil
+    }
     if selectedID == id {
       if tasks.isEmpty {
         selectedID = nil
@@ -127,9 +142,8 @@ public final class TaskStore {
   /// A duration that cannot be parsed leaves the stored time untouched, so a
   /// typo never silently destroys tracked hours — the title still applies.
   ///
-  /// For a running task the new duration becomes the *whole* elapsed time, so
-  /// `startedAt` rebases to now; otherwise the seconds already accrued in this
-  /// run would be added on top of what the user just typed.
+  /// A task that was running when editing began resumes from the edited
+  /// duration. A task that was already stopped remains stopped.
   public func commitEdit(_ id: UUID, title: String, durationText: String) {
     guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
 
@@ -138,37 +152,66 @@ public final class TaskStore {
 
     if let seconds = parseDuration(durationText) {
       tasks[index].seconds = seconds
-      if tasks[index].running {
-        tasks[index].startedAt = now()
-      }
     }
 
+    let wasPausedForEditing = pausedEditingID == id
+    if wasPausedForEditing {
+      tasks[index].running = true
+      tasks[index].startedAt = now()
+    } else if tasks[index].running {
+      // Keep this method safe for callers that commit without opening the
+      // inline editor first.
+      tasks[index].startedAt = now()
+    }
+
+    pausedEditingID = nil
     editingID = nil
     save()
   }
 
   /// Closes the editor without applying anything.
   public func cancelEdit() {
+    guard let id = editingID else { return }
+
+    if pausedEditingID == id,
+      let index = tasks.firstIndex(where: { $0.id == id })
+    {
+      tasks[index].running = true
+      tasks[index].startedAt = now()
+      pausedEditingID = nil
+      save()
+    } else {
+      pausedEditingID = nil
+    }
+
     editingID = nil
   }
 
   /// Opens the editor on a task.
   ///
-  /// Editing is also a pause action for a running timer. Bank the elapsed
-  /// time before replacing the row with the editor so the duration field
-  /// starts at the exact value the user saw, and so time cannot continue to
-  /// accrue while the entry is being changed.
+  /// Editing temporarily pauses a running timer. Bank the elapsed time before
+  /// replacing the row with the editor so the duration field starts at the
+  /// exact value the user saw. The task resumes when the edit is committed or
+  /// cancelled; any other running tasks continue normally.
   public func beginEdit(_ id: UUID) {
     guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
+
+    if editingID != nil, editingID != id {
+      cancelEdit()
+    }
 
     selectedID = id
     if tasks[index].running {
       tasks[index].seconds = elapsedSeconds(tasks[index], nowMs: now())
       tasks[index].running = false
       tasks[index].startedAt = 0
-      save()
+      pausedEditingID = id
     }
     editingID = id
+
+    if pausedEditingID == id {
+      save()
+    }
   }
 
   /// Moves the keyboard selection by `offset` rows, clamped at both ends.

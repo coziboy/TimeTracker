@@ -179,6 +179,50 @@ struct CommitEditTests {
     #expect(elapsedSeconds(store.tasks[0], nowMs: clock.now) == 15)
   }
 
+  @Test("cancelling an edit resumes only the task that was running")
+  func cancelResumesPausedTask() {
+    let (store, clock, _) = makeStore(tasks: [
+      TrackedTask(title: "A", seconds: 5),
+      TrackedTask(title: "B", seconds: 20),
+    ])
+    let firstID = store.tasks[0].id
+    let secondID = store.tasks[1].id
+    store.toggle(firstID)
+    store.toggle(secondID)
+    clock.advance(ms: 10_000)
+
+    store.beginEdit(firstID)
+    #expect(store.tasks[0].running == false)
+    #expect(store.tasks[1].running == true)
+    #expect(elapsedSeconds(store.tasks[0], nowMs: clock.now) == 15)
+    #expect(elapsedSeconds(store.tasks[1], nowMs: clock.now) == 30)
+
+    clock.advance(ms: 4_000)
+    store.cancelEdit()
+
+    #expect(store.tasks[0].running == true)
+    #expect(store.tasks[0].seconds == 15)
+    #expect(store.tasks[0].startedAt == clock.now)
+    #expect(elapsedSeconds(store.tasks[1], nowMs: clock.now) == 34)
+  }
+
+  @Test("committing an edit resumes the paused task from the entered duration")
+  func commitResumesPausedTask() {
+    let (store, clock, _) = makeStore(tasks: [TrackedTask(title: "A", seconds: 5)])
+    let id = store.tasks[0].id
+    store.toggle(id)
+    clock.advance(ms: 10_000)
+
+    store.beginEdit(id)
+    store.commitEdit(id, title: "Updated", durationText: "1:00")
+
+    #expect(store.tasks[0].title == "Updated")
+    #expect(store.tasks[0].seconds == 60)
+    #expect(store.tasks[0].running == true)
+    #expect(store.tasks[0].startedAt == clock.now)
+    #expect(store.editingID == nil)
+  }
+
   @Test("beginning an edit on a stopped task preserves its time")
   func preservesStoppedTask() {
     let (store, _, _) = makeStore(tasks: [TrackedTask(title: "A", seconds: 42)])
@@ -189,18 +233,6 @@ struct CommitEditTests {
     #expect(store.tasks[0].seconds == 42)
     #expect(store.tasks[0].running == false)
     #expect(store.editingID == id)
-  }
-
-  @Test("editing a running task rebases startedAt so the new duration is the baseline")
-  func rebasesRunningTask() {
-    let (store, clock, _) = makeStore(tasks: [TrackedTask(title: "A")])
-    store.toggle(store.tasks[0].id)
-    clock.advance(ms: 10_000)
-    store.commitEdit(store.tasks[0].id, title: "A", durationText: "1:00")
-
-    #expect(store.tasks[0].seconds == 60)
-    #expect(store.tasks[0].startedAt == clock.now)
-    #expect(store.tasks[0].running == true)
   }
 
   @Test("an unparseable duration keeps the stored time but still applies the title")

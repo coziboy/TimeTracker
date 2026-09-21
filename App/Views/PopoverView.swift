@@ -65,7 +65,10 @@ struct PopoverView: View {
           store.commitEdit(task.id, title: title, durationText: duration)
           controller.updateClockPolicy()
         },
-        onCancel: { store.cancelEdit() }
+        onCancel: {
+          store.cancelEdit()
+          controller.updateClockPolicy()
+        }
       )
     } else {
       TaskRow(
