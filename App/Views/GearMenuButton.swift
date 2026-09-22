@@ -40,6 +40,7 @@ struct GearMenuButton: NSViewRepresentable {
   @MainActor
   final class Coordinator: NSObject {
     var launchAtLogin: LaunchAtLogin
+    private var shortcutRecorderWindow: ShortcutRecorderWindow?
 
     init(launchAtLogin: LaunchAtLogin) {
       self.launchAtLogin = launchAtLogin
@@ -66,6 +67,25 @@ struct GearMenuButton: NSViewRepresentable {
         menu.addItem(note)
       }
 
+      menu.addItem(.separator())
+
+      let shortcut = NSMenuItem(
+        title: "Popup Shortcut…",
+        action: #selector(showShortcutRecorder),
+        keyEquivalent: "")
+      shortcut.target = self
+      // Show the saved shortcut in the column where macOS lists shortcuts,
+      // rather than spending a separate line on it. Clearing it lives in the
+      // recorder window.
+      if let equivalent = GlobalShortcut.shared.menuKeyEquivalent {
+        shortcut.keyEquivalent = equivalent.key
+        shortcut.keyEquivalentModifierMask = equivalent.modifiers
+      } else if GlobalShortcut.shared.current == nil {
+        shortcut.title = "Set Popup Shortcut…"
+      } else {
+        shortcut.title = "Popup Shortcut (\(GlobalShortcut.shared.displayName))…"
+      }
+      menu.addItem(shortcut)
       menu.addItem(.separator())
 
       // Shortcuts live here because the plan dropped the help overlay; this is
@@ -98,5 +118,14 @@ struct GearMenuButton: NSViewRepresentable {
         launchAtLogin.toggle()
       }
     }
+
+    @objc private func showShortcutRecorder() {
+      let recorderWindow = shortcutRecorderWindow ?? ShortcutRecorderWindow()
+      shortcutRecorderWindow = recorderWindow
+      Task { @MainActor in
+        recorderWindow.show()
+      }
+    }
+
   }
 }

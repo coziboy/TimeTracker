@@ -45,9 +45,11 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
 
     configureStatusItem()
     configurePopover()
+    GlobalShortcut.shared.onPress = { [weak self] in self?.togglePopover() }
     updateTitle()
     updateClockPolicy()
     observeClock()
+    GlobalShortcut.shared.registerDefaultIfNeeded()
   }
 
   // MARK: - Setup
