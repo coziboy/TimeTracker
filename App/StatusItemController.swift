@@ -90,7 +90,11 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
 
     // An LSUIElement app is not active by default, and an inactive app's
     // windows cannot become key — which would make every keystroke vanish.
-    NSApp.activate()
+    // The cooperative `activate()` is only a request, and macOS ignores it
+    // after a menu bar click. The first click inside the popover then
+    // activates the app instead, and that late activation dismisses the gear
+    // menu the same click just opened.
+    NSApp.activate(ignoringOtherApps: true)
     clock.tick()  // so the first frame shows current time, not a stale second
     popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
     // Even after activating, the popover window needs an explicit nudge to
