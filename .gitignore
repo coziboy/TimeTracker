@@ -9,3 +9,6 @@ DerivedData/
 xcuserdata/
 
 .DS_Store
+
+# AI-related files
+AGENTS.md
