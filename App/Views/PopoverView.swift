@@ -3,7 +3,7 @@ import TimeTrackerCore
 
 /// The popover's whole contents: the task list (or empty state) above the footer.
 struct PopoverView: View {
-  let store: TaskStore
+  @Bindable var store: TaskStore
   let clock: Clock
   let controller: StatusItemController
   let launchAtLogin: LaunchAtLogin
@@ -59,8 +59,8 @@ struct PopoverView: View {
 
     if store.editingID == task.id {
       InlineEditor(
-        task: task,
-        elapsed: elapsed,
+        title: $store.draftTitle,
+        duration: $store.draftDuration,
         onCommit: { title, duration in
           store.commitEdit(task.id, title: title, durationText: duration)
           controller.updateClockPolicy()

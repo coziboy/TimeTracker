@@ -8,8 +8,9 @@ import TimeTrackerCore
 /// `1h30m`. Anything unparseable leaves the stored time untouched, so a typo
 /// cannot silently wipe out tracked hours.
 struct InlineEditor: View {
-  @State private var title: String
-  @State private var duration: String
+  /// Owned by `TaskStore`, which reseeds them each time an editor opens.
+  @Binding var title: String
+  @Binding var duration: String
 
   /// Which field holds the keyboard. Also used to move focus on Tab.
   @FocusState private var focusedField: Field?
@@ -21,20 +22,6 @@ struct InlineEditor: View {
   let onCommit: (String, String) -> Void
   let onCancel: () -> Void
 
-  init(
-    task: TrackedTask,
-    elapsed: Int,
-    onCommit: @escaping (String, String) -> Void,
-    onCancel: @escaping () -> Void
-  ) {
-    // Seeded from the *displayed* elapsed time, so editing a running task
-    // starts from what the user can actually see on screen.
-    _title = State(initialValue: task.title)
-    _duration = State(initialValue: formatDuration(elapsed))
-    self.onCommit = onCommit
-    self.onCancel = onCancel
-  }
-
   var body: some View {
     HStack(spacing: 8) {
       TextField("Title", text: $title)
@@ -45,7 +32,10 @@ struct InlineEditor: View {
       TextField("0:00", text: $duration)
         .textFieldStyle(.roundedBorder)
         .monospacedDigit()
-        .frame(width: 90)
+        // Leave room for the full HH:MM:SS value. A narrower field scrolls
+        // horizontally to the insertion point and can make a nonzero stopped
+        // duration look like 00:00 while editing.
+        .frame(width: 112)
         .focused($focusedField, equals: .duration)
         .onSubmit(commit)
     }

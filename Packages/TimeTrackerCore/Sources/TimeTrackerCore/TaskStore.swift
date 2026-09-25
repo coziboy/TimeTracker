@@ -22,6 +22,15 @@ public final class TaskStore {
   /// The row currently showing the inline editor, if any.
   public var editingID: UUID?
 
+  /// The inline editor's field text, reseeded every time an editor opens.
+  ///
+  /// These live here rather than in the editor view's `@State`: SwiftUI keeps
+  /// `@State` whenever it reuses a view's identity and then ignores the new
+  /// seed, which showed a task's time from an earlier edit (for example, a
+  /// time from before the task was reset).
+  public var draftTitle = ""
+  public var draftDuration = ""
+
   /// A running task is banked and temporarily paused while it is edited.
   /// This is intentionally transient: it lets commit/cancel resume only a
   /// task that was running before editing, without changing the persisted
@@ -74,7 +83,7 @@ public final class TaskStore {
     let task = TrackedTask(title: "Empty")
     tasks.append(task)
     selectedID = task.id
-    editingID = task.id
+    openEditor(at: tasks.count - 1)
     save()
   }
 
@@ -207,11 +216,19 @@ public final class TaskStore {
       tasks[index].startedAt = 0
       pausedEditingID = id
     }
-    editingID = id
+    openEditor(at: index)
 
     if pausedEditingID == id {
       save()
     }
+  }
+
+  /// Seeds the drafts from what the row shows. The task is stopped (or was
+  /// just banked) by now, so its elapsed time is exactly its stored seconds.
+  private func openEditor(at index: Int) {
+    draftTitle = tasks[index].title
+    draftDuration = formatDuration(elapsedSeconds(tasks[index], nowMs: now()))
+    editingID = tasks[index].id
   }
 
   /// Moves the keyboard selection by `offset` rows, clamped at both ends.

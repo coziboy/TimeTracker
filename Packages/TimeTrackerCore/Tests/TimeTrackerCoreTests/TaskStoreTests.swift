@@ -36,6 +36,8 @@ struct AddTests {
     #expect(store.tasks[0].running == false)
     #expect(store.selectedID == store.tasks[0].id)
     #expect(store.editingID == store.tasks[0].id)
+    #expect(store.draftTitle == "Empty")
+    #expect(store.draftDuration == "00:00:00")
   }
 
   @Test("add persists immediately")
@@ -233,6 +235,47 @@ struct CommitEditTests {
     #expect(store.tasks[0].seconds == 42)
     #expect(store.tasks[0].running == false)
     #expect(store.editingID == id)
+  }
+
+  @Test("beginning an edit seeds the drafts from the task's current title and time")
+  func seedsDrafts() {
+    let (store, clock, _) = makeStore(tasks: [TrackedTask(title: "A", seconds: 5)])
+    let id = store.tasks[0].id
+    store.toggle(id)
+    clock.advance(ms: 10_000)
+
+    store.beginEdit(id)
+
+    #expect(store.draftTitle == "A")
+    #expect(store.draftDuration == "00:00:15")
+  }
+
+  @Test("re-editing after a reset shows the reset time, not the previous edit's")
+  func reseedsDraftsOnEveryEdit() {
+    let (store, _, _) = makeStore(tasks: [TrackedTask(title: "3S Groom", seconds: 3102)])
+    let id = store.tasks[0].id
+
+    store.beginEdit(id)
+    #expect(store.draftDuration == "00:51:42")
+    store.cancelEdit()
+    store.reset(id)
+
+    store.beginEdit(id)
+    #expect(store.draftDuration == "00:00:00")
+  }
+
+  @Test("switching the editor to another task seeds that task's values")
+  func switchingTasksReseedsDrafts() {
+    let (store, _, _) = makeStore(tasks: [
+      TrackedTask(title: "SG-2784", seconds: 10_991),
+      TrackedTask(title: "SG-2783", seconds: 1),
+    ])
+
+    store.beginEdit(store.tasks[0].id)
+    store.beginEdit(store.tasks[1].id)
+
+    #expect(store.draftTitle == "SG-2783")
+    #expect(store.draftDuration == "00:00:01")
   }
 
   @Test("an unparseable duration keeps the stored time but still applies the title")
