@@ -265,14 +265,17 @@ struct CommitEditTests {
   }
 
   @Test("switching the editor to another task seeds that task's values")
-  func switchingTasksReseedsDrafts() {
+  func switchingTasksReseedsDrafts() throws {
     let (store, _, _) = makeStore(tasks: [
       TrackedTask(title: "SG-2784", seconds: 10_991),
       TrackedTask(title: "SG-2783", seconds: 1),
     ])
 
-    store.beginEdit(store.tasks[0].id)
-    store.beginEdit(store.tasks[1].id)
+    // The store sorts by title, so look the rows up rather than by index.
+    let longer = try #require(store.tasks.first { $0.title == "SG-2784" })
+    let shorter = try #require(store.tasks.first { $0.title == "SG-2783" })
+    store.beginEdit(longer.id)
+    store.beginEdit(shorter.id)
 
     #expect(store.draftTitle == "SG-2783")
     #expect(store.draftDuration == "00:00:01")
@@ -358,15 +361,16 @@ struct RoundTripTests {
     store.add()
     store.commitEdit(store.tasks[0].id, title: "Write", durationText: "10")
     store.add()
-    store.toggle(store.tasks[1].id)
+    // "Empty" sorts before "Write", so the new task is at index 0.
+    store.toggle(store.tasks[0].id)
 
     // A fresh store reading the same file, 30 seconds later.
     clock.advance(ms: 30_000)
     let reloaded = TaskStore(persistence: JSONFilePersistence(url: url), now: { clock.now })
 
     #expect(reloaded.tasks == store.tasks)
-    #expect(reloaded.tasks[0].seconds == 10)
-    #expect(elapsedSeconds(reloaded.tasks[1], nowMs: clock.now) == 30)
+    #expect(reloaded.tasks[1].seconds == 10)
+    #expect(elapsedSeconds(reloaded.tasks[0], nowMs: clock.now) == 30)
     #expect(reloaded.totalSecondsNow == 40)
   }
 }

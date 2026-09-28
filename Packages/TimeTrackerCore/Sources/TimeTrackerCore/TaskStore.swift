@@ -16,6 +16,7 @@ import Observation
 @MainActor
 @Observable
 public final class TaskStore {
+  /// Always ordered alphabetically by title; see `sortTasks()`.
   public private(set) var tasks: [TrackedTask]
   /// The keyboard-highlighted row, if any.
   public var selectedID: UUID?
@@ -30,6 +31,22 @@ public final class TaskStore {
   /// time from before the task was reset).
   public var draftTitle = ""
   public var draftDuration = ""
+
+  /// The popover's search text. Not persisted: each popover open starts with
+  /// the full list.
+  ///
+  /// Changing it keeps the selection on something the user can see: a
+  /// selection the new query hides moves to the first visible task (or nil),
+  /// and an editor on a hidden task is cancelled so it cannot linger offscreen.
+  public var searchQuery = "" {
+    didSet {
+      guard searchQuery != oldValue else { return }
+      if let id = editingID, !visibleTasks.contains(where: { $0.id == id }) {
+        cancelEdit()
+      }
+      retargetSelection()
+    }
+  }
 
   /// A running task is banked and temporarily paused while it is edited.
   /// This is intentionally transient: it lets commit/cancel resume only a
@@ -48,9 +65,19 @@ public final class TaskStore {
     self.persistence = persistence
     self.now = now
     self.tasks = persistence.load()
+    sortTasks()
   }
 
   // MARK: - Derived state
+
+  /// The tasks matching `searchQuery`, in the same sorted order as `tasks`.
+  /// Matching is case- and diacritic-insensitive, so "cafe" finds "Café"; a
+  /// blank query shows everything.
+  public var visibleTasks: [TrackedTask] {
+    let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !query.isEmpty else { return tasks }
+    return tasks.filter { $0.title.localizedStandardContains(query) }
+  }
 
   /// True while at least one timer is counting. Drives the red menu bar tint
   /// and whether the per-second clock needs to run at all.
@@ -71,19 +98,24 @@ public final class TaskStore {
 
   // MARK: - Mutations
 
-  /// Appends a blank task, selects it, and opens its editor so the user can
-  /// type a title straight away.
+  /// Adds a blank task in its sorted position, selects it, and opens its
+  /// editor so the user can type a title straight away. Clears the search so
+  /// the new row is visible.
   public func add() {
     // ⌘N is still available from inside the editor. Finish the previous
     // edit's temporary pause before replacing it with the new editor.
     if editingID != nil {
       cancelEdit()
     }
+    searchQuery = ""
 
     let task = TrackedTask(title: "Empty")
     tasks.append(task)
+    sortTasks()
     selectedID = task.id
-    openEditor(at: tasks.count - 1)
+    if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+      openEditor(at: index)
+    }
     save()
   }
 
@@ -126,10 +158,12 @@ public final class TaskStore {
     save()
   }
 
-  /// Removes a task and moves the selection to a sensible neighbor: the task
-  /// that slid into its place, or the one before it when deleting the last row.
+  /// Removes a task and moves the selection to a sensible visible neighbor:
+  /// the task that slid into its place, or the one before it when deleting
+  /// the last row.
   public func delete(_ id: UUID) {
     guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
+    let visibleIndex = visibleTasks.firstIndex(where: { $0.id == id })
     tasks.remove(at: index)
 
     if editingID == id {
@@ -137,10 +171,11 @@ public final class TaskStore {
       pausedEditingID = nil
     }
     if selectedID == id {
-      if tasks.isEmpty {
+      let visible = visibleTasks
+      if visible.isEmpty {
         selectedID = nil
       } else {
-        selectedID = tasks[min(index, tasks.count - 1)].id
+        selectedID = visible[min(visibleIndex ?? 0, visible.count - 1)].id
       }
     }
     save()
@@ -153,6 +188,9 @@ public final class TaskStore {
   ///
   /// A task that was running when editing began resumes from the edited
   /// duration. A task that was already stopped remains stopped.
+  ///
+  /// The list re-sorts here, never while typing, so a renamed row only moves
+  /// once the edit is applied. Selection is by id, so it follows the task.
   public func commitEdit(_ id: UUID, title: String, durationText: String) {
     guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
 
@@ -175,6 +213,11 @@ public final class TaskStore {
 
     pausedEditingID = nil
     editingID = nil
+    sortTasks()
+    // A rename can take the selected task out of the current search results.
+    if let selected = selectedID, !visibleTasks.contains(where: { $0.id == selected }) {
+      retargetSelection()
+    }
     save()
   }
 
@@ -231,17 +274,40 @@ public final class TaskStore {
     editingID = tasks[index].id
   }
 
-  /// Moves the keyboard selection by `offset` rows, clamped at both ends.
-  /// With nothing selected, moving down lands on the first row and up on the last.
+  /// Moves the keyboard selection by `offset` rows of `visibleTasks`, clamped
+  /// at both ends. With nothing visible selected, moving down lands on the
+  /// first row and up on the last.
   public func moveSelection(by offset: Int) {
-    guard !tasks.isEmpty else { return }
+    let visible = visibleTasks
+    guard !visible.isEmpty else { return }
 
-    guard let current = selectedID, let index = tasks.firstIndex(where: { $0.id == current }) else {
-      selectedID = offset > 0 ? tasks.first?.id : tasks.last?.id
+    guard let current = selectedID, let index = visible.firstIndex(where: { $0.id == current }) else {
+      selectedID = offset > 0 ? visible.first?.id : visible.last?.id
       return
     }
-    let target = min(max(index + offset, 0), tasks.count - 1)
-    selectedID = tasks[target].id
+    let target = min(max(index + offset, 0), visible.count - 1)
+    selectedID = visible[target].id
+  }
+
+  /// Keeps the selection visible: a missing or hidden selection moves to the
+  /// first visible task, or to nil when nothing matches.
+  private func retargetSelection() {
+    let visible = visibleTasks
+    if let id = selectedID, visible.contains(where: { $0.id == id }) { return }
+    selectedID = visible.first?.id
+  }
+
+  /// Orders tasks by title the way Finder orders file names: case-insensitive
+  /// and numeric-aware, so "task 2" precedes "Task 10". Equal titles fall back
+  /// to the id so the order is deterministic across launches.
+  private func sortTasks() {
+    tasks.sort { lhs, rhs in
+      switch lhs.title.localizedStandardCompare(rhs.title) {
+      case .orderedAscending: true
+      case .orderedDescending: false
+      case .orderedSame: lhs.id.uuidString < rhs.id.uuidString
+      }
+    }
   }
 
   private func save() {

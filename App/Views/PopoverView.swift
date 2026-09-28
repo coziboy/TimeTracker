@@ -1,12 +1,14 @@
 import SwiftUI
 import TimeTrackerCore
 
-/// The popover's whole contents: the task list (or empty state) above the footer.
+/// The popover's whole contents: the search field and task list (or empty
+/// state) above the footer.
 struct PopoverView: View {
   @Bindable var store: TaskStore
   let clock: Clock
   let controller: StatusItemController
   let launchAtLogin: LaunchAtLogin
+  let searchFocus: SearchFocus
 
   /// Keeps the popover from growing without bound once there are many tasks;
   /// the list scrolls past this point.
@@ -17,7 +19,17 @@ struct PopoverView: View {
       if store.tasks.isEmpty {
         EmptyStateView()
       } else {
-        list
+        SearchField(query: $store.searchQuery, focus: searchFocus)
+
+        if store.visibleTasks.isEmpty {
+          Text("No matching tasks")
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 20)
+        } else {
+          list
+        }
       }
 
       Divider()
@@ -40,7 +52,7 @@ struct PopoverView: View {
   private var list: some View {
     ScrollView {
       LazyVStack(spacing: 2) {
-        ForEach(store.tasks) { task in
+        ForEach(store.visibleTasks) { task in
           row(for: task)
         }
       }

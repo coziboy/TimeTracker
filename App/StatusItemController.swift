@@ -19,6 +19,8 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
   private let launchAtLogin: LaunchAtLogin
   private let statusItem: NSStatusItem
   private let popover: NSPopover
+  /// Shared with the search field's `@FocusState`; see `SearchFocus`.
+  private let searchFocus = SearchFocus()
 
   /// The local key-down monitor, installed only while the popover is shown.
   private var keyMonitor: Any?
@@ -69,7 +71,8 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     popover.delegate = self
     popover.contentViewController = NSHostingController(
       rootView: PopoverView(
-        store: store, clock: clock, controller: self, launchAtLogin: launchAtLogin)
+        store: store, clock: clock, controller: self, launchAtLogin: launchAtLogin,
+        searchFocus: searchFocus)
     )
   }
 
@@ -100,6 +103,9 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     // Even after activating, the popover window needs an explicit nudge to
     // take key status so the text fields can receive typing.
     popover.contentViewController?.view.window?.makeKey()
+    // Start in list navigation even if AppKit picked the search field as the
+    // window's initial first responder.
+    blurSearch()
 
     installKeyMonitor()
     installOutsideClickMonitors()
@@ -116,6 +122,9 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     removeKeyMonitor()
     removeOutsideClickMonitors()
     store.cancelEdit()
+    // Each open starts with the full list and the keyboard on the list.
+    searchFocus.isFocused = false
+    store.searchQuery = ""
     updateClockPolicy()
   }
 
@@ -284,6 +293,28 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
       return false
     }
 
+    // While the search field has the keyboard, typing goes to it. Arrows
+    // still move through the filtered rows; Return and Esc step back out to
+    // list navigation (Esc clears a non-empty query first).
+    if !editing && searchFocus.isFocused {
+      switch command {
+      case .resetSelected, .toggleSelected, .deleteSelected:
+        return false
+      case .editSelected:
+        blurSearch()
+        return true
+      case .closePopover:
+        if store.searchQuery.isEmpty {
+          blurSearch()
+        } else {
+          store.searchQuery = ""
+        }
+        return true
+      default:
+        break
+      }
+    }
+
     switch command {
     case .moveDown:
       store.moveSelection(by: 1)
@@ -307,11 +338,27 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
       updateClockPolicy()
     case .addTask:
       store.add()
+    case .focusSearch:
+      // The field only exists while there are tasks to search.
+      guard !store.tasks.isEmpty else { return true }
+      searchFocus.isFocused = true
     case .closePopover:
       close()
     case .quit:
       NSApp.terminate(nil)
     }
     return true
+  }
+
+  /// Hands the keyboard back to list navigation. Resigning the AppKit first
+  /// responder directly as well as through `@FocusState` makes it take effect
+  /// immediately, before SwiftUI's next update.
+  private func blurSearch() {
+    searchFocus.isFocused = false
+    if let window = popover.contentViewController?.view.window,
+      window.firstResponder is NSText
+    {
+      window.makeFirstResponder(nil)
+    }
   }
 }
