@@ -86,6 +86,14 @@ struct GearMenuButton: NSViewRepresentable {
         shortcut.title = "Popup Shortcut (\(GlobalShortcut.shared.displayName))…"
       }
       menu.addItem(shortcut)
+
+      let cli = NSMenuItem(
+        title: "Install Command Line Tool…",
+        action: #selector(installCommandLineTool),
+        keyEquivalent: "")
+      cli.target = self
+      cli.state = CommandLineTool.isInstalled ? .on : .off
+      menu.addItem(cli)
       menu.addItem(.separator())
 
       // Shortcuts live here because the plan dropped the help overlay; this is
@@ -116,6 +124,13 @@ struct GearMenuButton: NSViewRepresentable {
         launchAtLogin.openLoginItemsSettings()
       } else {
         launchAtLogin.toggle()
+      }
+    }
+
+    @objc private func installCommandLineTool() {
+      // Let the menu finish closing before a modal alert takes over.
+      Task { @MainActor in
+        CommandLineTool.installShowingResult()
       }
     }
 

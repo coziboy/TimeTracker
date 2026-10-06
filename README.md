@@ -60,7 +60,7 @@ open TimeTracker.xcodeproj
 `TimeTracker.xcodeproj` is generated and gitignored — after changing
 `project.yml` or adding a source file, re-run `xcodegen generate`.
 
-Run the logic tests with:
+Run the logic and CLI tests with:
 
 ```bash
 cd Packages/TimeTrackerCore && swift test
@@ -105,6 +105,41 @@ type the replacement and press Return to commit. Compact inputs such as `90`,
 While the editor is open the text fields take the keyboard: Return commits,
 Esc cancels, and only ⌘N and ⌘Q still act as shortcuts.
 
+## Command line
+
+The app bundles a `timetracker` CLI that drives the same task list. `./install.sh`
+links it to `~/.local/bin/timetracker` (override with `TIMETRACKER_BIN_DIR`); the
+gear menu's **Install Command Line Tool…** does the same for a copy installed by hand.
+
+```bash
+timetracker                       # 01:23:45  1 running
+timetracker list                  # ● 00:42:10  Client A
+timetracker add Client B --start
+timetracker stop client a         # any unique part of a title, or an id
+timetracker set "Client B" 1h30m
+timetracker rename "Client B" Client C
+timetracker reset --all
+timetracker list --json           # for scripts
+timetracker help                  # everything else
+```
+
+Words after the command join up, so quotes are only needed around `rename`'s
+task. An ambiguous name lists the matching tasks and changes nothing.
+
+The CLI reads and writes `tasks.json` directly, so it works whether or not the
+app is running; the app watches the file and picks up changes within a moment.
+Like the app, it refuses to touch a data file it cannot read. `--file <path>` or
+`TIMETRACKER_DATA` points it at another file.
+
+Tab completion of commands and task names:
+
+```bash
+eval "$(timetracker completion zsh)"    # in ~/.zshrc
+eval "$(timetracker completion bash)"   # in ~/.bashrc
+```
+
+During development, `cd Packages/TimeTrackerCore && swift run timetracker list`.
+
 ## Launch at login
 
 The gear menu has a Launch at Login toggle, backed by `SMAppService`.
@@ -142,6 +177,10 @@ Packages/TimeTrackerCore/       Pure logic, no UI, tested with `swift test`
   Elapsed.swift                 elapsed and total seconds
   TaskStore.swift               Source of truth; saves on every mutation
   Persistence.swift             JSON file + in-memory test double
+  TaskResolution.swift          Find a task from typed text (CLI)
+Packages/TimeTrackerCore/Sources/
+  TimeTrackerCLI/               CLI parsing, commands, completion scripts
+  timetracker/main.swift        The CLI executable, bundled in Contents/Helpers
 App/                            The macOS app
   TimeTrackerApp.swift          Entry point; declares no windows
   AppDelegate.swift             Builds the store, clock and status item
@@ -149,6 +188,8 @@ App/                            The macOS app
   Clock.swift                   One shared 1s heartbeat
   KeyCommand.swift              NSEvent -> command mapping
   LaunchAtLogin.swift           SMAppService wrapper
+  TasksFileWatcher.swift        Reloads the store when the CLI writes
+  CommandLineTool.swift         Gear-menu CLI install (~/.local/bin link)
   Views/                        SwiftUI: popover, rows, editor, footer
 ```
 

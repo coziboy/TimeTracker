@@ -37,6 +37,9 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
   private var lastTitle: String?
   private var lastRunning: Bool?
 
+  /// Reloads the store when the CLI (or anything else) rewrites tasks.json.
+  private var fileWatcher: TasksFileWatcher?
+
   init(store: TaskStore, clock: Clock, launchAtLogin: LaunchAtLogin) {
     self.store = store
     self.clock = clock
@@ -52,6 +55,13 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     updateClockPolicy()
     observeClock()
     GlobalShortcut.shared.registerDefaultIfNeeded()
+    fileWatcher = TasksFileWatcher(
+      directory: JSONFilePersistence.defaultURL.deletingLastPathComponent()
+    ) { [weak self] in
+      guard let self, self.store.reload() else { return }
+      // A CLI `start` must wake the menu bar clock, and a `stop` may let it rest.
+      self.updateClockPolicy()
+    }
   }
 
   // MARK: - Setup

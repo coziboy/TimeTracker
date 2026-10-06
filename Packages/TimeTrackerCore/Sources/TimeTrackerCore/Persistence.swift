@@ -6,6 +6,13 @@ import OSLog
 public protocol TaskPersisting: Sendable {
   func load() -> [TrackedTask]
   func save(_ tasks: [TrackedTask])
+  /// The stored tasks, or `nil` when the store exists but cannot be read.
+  func loadIfReadable() -> [TrackedTask]?
+}
+
+extension TaskPersisting {
+  /// Stores that cannot be unreadable simply load.
+  public func loadIfReadable() -> [TrackedTask]? { load() }
 }
 
 /// Stores the task list as pretty-printed JSON in a single file.
@@ -29,6 +36,17 @@ public struct JSONFilePersistence: TaskPersisting {
   }
 
   public func load() -> [TrackedTask] {
+    // Deliberately leave a bad file alone: starting empty is recoverable,
+    // overwriting the user's only copy is not. The next save replaces it.
+    loadIfReadable() ?? []
+  }
+
+  /// Like `load()`, but tells a missing file (`[]`, a first launch) apart
+  /// from one that exists and cannot be decoded (`nil`).
+  ///
+  /// The CLI and the app's live reload use this so that neither ever acts on
+  /// — and then writes over — a file it could not read.
+  public func loadIfReadable() -> [TrackedTask]? {
     guard let data = try? Data(contentsOf: url) else {
       // No file yet — a first launch, not an error.
       return []
@@ -38,10 +56,8 @@ public struct JSONFilePersistence: TaskPersisting {
       // hand-edited entry cannot put the UI into an impossible state.
       return try JSONDecoder().decode([TrackedTask].self, from: data).map { $0.normalized() }
     } catch {
-      // Deliberately leave the bad file alone: starting empty is recoverable,
-      // overwriting the user's only copy is not. The next save replaces it.
       logger.error("Could not decode \(url.path, privacy: .public): \(error.localizedDescription)")
-      return []
+      return nil
     }
   }
 

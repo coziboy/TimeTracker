@@ -19,7 +19,7 @@ of them, and committing an inline edit overwrites CLI changes to that same task.
   `setDuration(_:seconds:)` (running stays running), `reload()` (keeps
   selection/editor when the task still exists; cancels an edit of a deleted task).
 - `resolveTask(_:in:)` — exact id, exact case-insensitive title, unique title
-  prefix; ambiguity reports the candidates.
+  prefix, then unique substring; ambiguity reports the candidates.
 
 ## CLI
 
@@ -35,6 +35,11 @@ and a thin `timetracker` executable.
     timetracker set <task> <duration>
     timetracker delete <task>
 
+    timetracker completion zsh|bash
+
+`completion` prints a script that completes commands, flags and task titles;
+titles come live from a hidden `timetracker __complete-tasks`.
+
 `--file <path>` or `TIMETRACKER_DATA` overrides the data file. Unreadable data
 file: exit 1, file untouched.
 
@@ -48,7 +53,8 @@ file: exit 1, file untouched.
 
 ## Bundling
 
-XcodeGen `tool` target `timetracker`, copied to
+XcodeGen `tool` target `TimeTrackerCLITool` (product `timetracker`; the target
+name differs so its build folder does not collide with `TimeTracker`'s), copied to
 `TimeTracker.app/Contents/Helpers/` (not `MacOS/`: `timetracker` and
 `TimeTracker` collide on case-insensitive volumes). `install.sh` links it into
 `~/.local/bin` (or `$TIMETRACKER_BIN_DIR`) and warns when that is not on PATH.

@@ -86,3 +86,29 @@ struct InMemoryPersistenceTests {
     #expect(store.load()[0].title == "A")
   }
 }
+
+@Suite("JSONFilePersistence.loadIfReadable")
+struct LoadIfReadableTests {
+  private func tempURL() -> URL {
+    FileManager.default.temporaryDirectory
+      .appendingPathComponent("TimeTrackerTests-\(UUID().uuidString)", isDirectory: true)
+      .appendingPathComponent("tasks.json")
+  }
+
+  @Test("a missing file is readable and empty")
+  func missing() {
+    #expect(JSONFilePersistence(url: tempURL()).loadIfReadable() == [])
+  }
+
+  @Test("an undecodable file is nil, not empty")
+  func corrupt() throws {
+    let url = tempURL()
+    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+    try FileManager.default.createDirectory(
+      at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data("{".utf8).write(to: url)
+
+    #expect(JSONFilePersistence(url: url).loadIfReadable() == nil)
+    #expect(JSONFilePersistence(url: url).load() == [])
+  }
+}

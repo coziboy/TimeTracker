@@ -37,6 +37,24 @@ sleep 1
 rm -rf /Applications/TimeTracker.app
 cp -R "$BUILT" /Applications/
 
+# The CLI ships inside the app; link it rather than copy it so every
+# reinstall updates it too. Override the directory with TIMETRACKER_BIN_DIR.
+BIN_DIR="${TIMETRACKER_BIN_DIR:-$HOME/.local/bin}"
+CLI=/Applications/TimeTracker.app/Contents/Helpers/timetracker
+echo "==> Linking CLI: $BIN_DIR/timetracker"
+mkdir -p "$BIN_DIR"
+if [[ -e "$BIN_DIR/timetracker" && ! -L "$BIN_DIR/timetracker" ]]; then
+  # A real file there is something the user put in place; leave it alone.
+  echo "    $BIN_DIR/timetracker exists and is not a link; skipped"
+else
+  ln -sf "$CLI" "$BIN_DIR/timetracker"
+fi
+if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
+  echo "    $BIN_DIR is not on your PATH; add it to use 'timetracker'"
+fi
+echo "    Tab completion (zsh): add to ~/.zshrc"
+echo '      eval "$(timetracker completion zsh)"'
+
 echo "==> Launching"
 open -a /Applications/TimeTracker.app
 echo "TimeTracker is in your menu bar."

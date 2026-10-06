@@ -181,6 +181,70 @@ public final class TaskStore {
     save()
   }
 
+  /// Adds a task with `title` in its sorted position without opening the
+  /// editor — the path for callers that already know the title, such as the
+  /// CLI. A blank title becomes "Empty", as everywhere else.
+  @discardableResult
+  public func add(title: String, start: Bool = false) -> UUID {
+    let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+    var task = TrackedTask(title: trimmed.isEmpty ? "Empty" : trimmed)
+    if start {
+      task.running = true
+      task.startedAt = now()
+    }
+    tasks.append(task)
+    sortTasks()
+    save()
+    return task.id
+  }
+
+  /// Renames one task and re-sorts. Its timer is untouched, so a running task
+  /// keeps every second it has counted.
+  public func rename(_ id: UUID, to title: String) {
+    guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
+    let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+    tasks[index].title = trimmed.isEmpty ? "Empty" : trimmed
+    sortTasks()
+    save()
+  }
+
+  /// Sets one task's time. A running task keeps running, counting up from
+  /// the new value.
+  public func setDuration(_ id: UUID, seconds: Int) {
+    guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
+    tasks[index].seconds = max(0, seconds)
+    if tasks[index].running {
+      tasks[index].startedAt = now()
+    }
+    save()
+  }
+
+  /// Replaces the task list with what persistence holds now — used when
+  /// another process (the CLI) changed the file.
+  ///
+  /// An unreadable store changes nothing, so a half-written or hand-broken
+  /// file is never loaded as "no tasks" and then saved over. Selection and an
+  /// open editor survive when their task still exists; an editor on a task
+  /// that was deleted elsewhere is closed.
+  ///
+  /// Returns true when the list actually changed.
+  @discardableResult
+  public func reload() -> Bool {
+    guard var loaded = persistence.loadIfReadable() else { return false }
+    loaded.sort(by: Self.titleOrder)
+    guard loaded != tasks else { return false }
+
+    if let editing = editingID, !loaded.contains(where: { $0.id == editing }) {
+      editingID = nil
+      pausedEditingID = nil
+    }
+    tasks = loaded
+    if let selected = selectedID, !visibleTasks.contains(where: { $0.id == selected }) {
+      retargetSelection()
+    }
+    return true
+  }
+
   /// Applies the inline editor's fields and closes it.
   ///
   /// A duration that cannot be parsed leaves the stored time untouched, so a
@@ -301,12 +365,14 @@ public final class TaskStore {
   /// and numeric-aware, so "task 2" precedes "Task 10". Equal titles fall back
   /// to the id so the order is deterministic across launches.
   private func sortTasks() {
-    tasks.sort { lhs, rhs in
-      switch lhs.title.localizedStandardCompare(rhs.title) {
-      case .orderedAscending: true
-      case .orderedDescending: false
-      case .orderedSame: lhs.id.uuidString < rhs.id.uuidString
-      }
+    tasks.sort(by: Self.titleOrder)
+  }
+
+  private static func titleOrder(_ lhs: TrackedTask, _ rhs: TrackedTask) -> Bool {
+    switch lhs.title.localizedStandardCompare(rhs.title) {
+    case .orderedAscending: true
+    case .orderedDescending: false
+    case .orderedSame: lhs.id.uuidString < rhs.id.uuidString
     }
   }
 

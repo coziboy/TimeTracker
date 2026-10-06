@@ -374,3 +374,124 @@ struct RoundTripTests {
     #expect(reloaded.totalSecondsNow == 40)
   }
 }
+
+@Suite("TaskStore CLI mutations")
+@MainActor
+struct CLIMutationTests {
+  @Test("add(title:) inserts sorted without opening the editor")
+  func addTitled() {
+    let (store, _, persistence) = makeStore(tasks: [TrackedTask(title: "B")])
+    let id = store.add(title: "  A  ")
+
+    #expect(store.tasks.map(\.title) == ["A", "B"])
+    #expect(store.tasks[0].id == id)
+    #expect(store.editingID == nil)
+    #expect(persistence.load().count == 2)
+  }
+
+  @Test("add(title:start:) starts the timer now, and a blank title is Empty")
+  func addStarted() {
+    let (store, clock, _) = makeStore()
+    store.add(title: " ", start: true)
+
+    #expect(store.tasks[0].title == "Empty")
+    #expect(store.tasks[0].running)
+    #expect(store.tasks[0].startedAt == clock.now)
+  }
+
+  @Test("rename keeps a running task's counted time and re-sorts")
+  func renameRunning() {
+    let (store, clock, persistence) = makeStore(tasks: [
+      TrackedTask(title: "A", seconds: 10, running: true, startedAt: 1_000_000),
+      TrackedTask(title: "B"),
+    ])
+    clock.advance(ms: 5_000)
+    store.rename(store.tasks[0].id, to: "C")
+
+    #expect(store.tasks.map(\.title) == ["B", "C"])
+    #expect(store.elapsed(store.tasks[1], at: clock.now) == 15)
+    #expect(persistence.load().contains { $0.title == "C" })
+  }
+
+  @Test("setDuration on a running task counts on from the new value")
+  func setRunning() {
+    let (store, clock, _) = makeStore(tasks: [
+      TrackedTask(title: "A", seconds: 10, running: true, startedAt: 1_000_000)
+    ])
+    clock.advance(ms: 5_000)
+    store.setDuration(store.tasks[0].id, seconds: 3600)
+
+    #expect(store.tasks[0].running)
+    #expect(store.elapsed(store.tasks[0], at: clock.now) == 3600)
+    clock.advance(ms: 2_000)
+    #expect(store.elapsed(store.tasks[0], at: clock.now) == 3602)
+  }
+
+  @Test("setDuration clamps negatives to zero")
+  func setNegative() {
+    let (store, _, _) = makeStore(tasks: [TrackedTask(title: "A", seconds: 10)])
+    store.setDuration(store.tasks[0].id, seconds: -5)
+    #expect(store.tasks[0].seconds == 0)
+  }
+}
+
+@Suite("TaskStore.reload")
+@MainActor
+struct ReloadTests {
+  @Test("reload picks up tasks written by someone else, sorted")
+  func picksUpChanges() {
+    let (store, _, persistence) = makeStore(tasks: [TrackedTask(title: "B")])
+    persistence.save(store.tasks + [TrackedTask(title: "A")])
+
+    #expect(store.reload())
+    #expect(store.tasks.map(\.title) == ["A", "B"])
+  }
+
+  @Test("reload reports no change when the store matches")
+  func noChange() {
+    let (store, _, _) = makeStore(tasks: [TrackedTask(title: "A")])
+    #expect(store.reload() == false)
+  }
+
+  @Test("reload keeps the editor open on a task that still exists")
+  func keepsEditor() {
+    let (store, _, persistence) = makeStore(tasks: [TrackedTask(title: "A")])
+    let id = store.tasks[0].id
+    store.beginEdit(id)
+    persistence.save(store.tasks + [TrackedTask(title: "B")])
+
+    store.reload()
+    #expect(store.editingID == id)
+    #expect(store.selectedID == id)
+  }
+
+  @Test("reload closes the editor and moves selection off a deleted task")
+  func deletedElsewhere() {
+    let (store, _, persistence) = makeStore(tasks: [
+      TrackedTask(title: "A"), TrackedTask(title: "B"),
+    ])
+    let a = store.tasks[0].id
+    store.beginEdit(a)
+    persistence.save([store.tasks[1]])
+
+    store.reload()
+    #expect(store.editingID == nil)
+    #expect(store.selectedID == store.tasks[0].id)
+  }
+
+  @Test("reload leaves everything alone when the file is unreadable")
+  func unreadable() throws {
+    let dir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("TimeTrackerTests-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let url = dir.appendingPathComponent("tasks.json")
+    let persistence = JSONFilePersistence(url: url)
+    persistence.save([TrackedTask(title: "A")])
+    let store = TaskStore(persistence: persistence)
+
+    try Data("not json".utf8).write(to: url)
+    #expect(store.reload() == false)
+    #expect(store.tasks.map(\.title) == ["A"])
+    #expect(try String(contentsOf: url, encoding: .utf8) == "not json")
+  }
+}

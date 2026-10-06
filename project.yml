@@ -26,6 +26,14 @@ targets:
     sources: [App]
     dependencies:
       - package: TimeTrackerCore
+      # The CLI ships inside the app. Helpers/, not MacOS/: `timetracker` and
+      # `TimeTracker` cannot share a folder on a case-insensitive volume.
+      - target: TimeTrackerCLITool
+        embed: true
+        codeSign: true
+        copy:
+          destination: wrapper
+          subpath: Contents/Helpers
     info:
       path: App/Info.plist
       properties:
@@ -35,6 +43,20 @@ targets:
         CFBundleName: TimeTracker
         CFBundleShortVersionString: "1.0"
         CFBundleVersion: "1"
+
+  # Named apart from its `timetracker` product: Xcode's per-target build
+  # folders would otherwise collide with TimeTracker's on a case-insensitive disk.
+  TimeTrackerCLITool:
+    type: tool
+    platform: macOS
+    settings:
+      PRODUCT_NAME: timetracker
+      PRODUCT_MODULE_NAME: TimeTrackerCLITool
+      PRODUCT_BUNDLE_IDENTIFIER: dev.andreas.TimeTracker.cli
+    sources: [Packages/TimeTrackerCore/Sources/timetracker]
+    dependencies:
+      - package: TimeTrackerCore
+        product: TimeTrackerCLI
 
 schemes:
   TimeTracker:
