@@ -1,6 +1,7 @@
 import AppKit
 import Observation
 import SwiftUI
+import TimeTrackerCore
 
 /// Whether the search field holds the keyboard, shared between SwiftUI and
 /// the AppKit key monitor.
@@ -18,6 +19,7 @@ final class SearchFocus {
 /// the text, and a clear button while there is something to clear.
 struct SearchField: View {
   @Binding var query: String
+  @Binding var sortOrder: TaskStore.SortOrder
   let focus: SearchFocus
 
   @FocusState private var isFocused: Bool
@@ -30,6 +32,17 @@ struct SearchField: View {
       TextField("Search", text: $query)
         .textFieldStyle(.plain)
         .focused($isFocused)
+
+      Picker("Sort", selection: $sortOrder) {
+        ForEach(TaskStore.SortOrder.allCases) { order in
+          Text(order.rawValue).tag(order)
+        }
+      }
+      .labelsHidden()
+      .pickerStyle(.menu)
+      .controlSize(.small)
+      .fixedSize()
+      .help("Sort tasks")
 
       if !query.isEmpty {
         Button {

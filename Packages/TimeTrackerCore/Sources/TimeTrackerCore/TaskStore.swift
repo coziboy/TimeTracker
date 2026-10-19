@@ -16,12 +16,28 @@ import Observation
 @MainActor
 @Observable
 public final class TaskStore {
+  public enum SortOrder: String, CaseIterable, Identifiable {
+    case alphabetically = "Alphabetically"
+    case activeTask = "Active Task"
+
+    public var id: String { rawValue }
+  }
+
   /// Always ordered alphabetically by title; see `sortTasks()`.
   public private(set) var tasks: [TrackedTask]
   /// The keyboard-highlighted row, if any.
   public var selectedID: UUID?
   /// The row currently showing the inline editor, if any.
   public var editingID: UUID?
+
+  /// Controls only the displayed order. `tasks` remains alphabetized for
+  /// persistence and other consumers.
+  public var sortOrder: SortOrder = .alphabetically {
+    didSet {
+      guard sortOrder != oldValue else { return }
+      retargetSelection()
+    }
+  }
 
   /// The inline editor's field text, reseeded every time an editor opens.
   ///
@@ -75,8 +91,12 @@ public final class TaskStore {
   /// blank query shows everything.
   public var visibleTasks: [TrackedTask] {
     let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !query.isEmpty else { return tasks }
-    return tasks.filter { $0.title.localizedStandardContains(query) }
+    let matching = query.isEmpty ? tasks : tasks.filter { $0.title.localizedStandardContains(query) }
+    guard sortOrder == .activeTask else { return matching }
+    return matching.sorted { lhs, rhs in
+      if lhs.running != rhs.running { return lhs.running }
+      return Self.titleOrder(lhs, rhs)
+    }
   }
 
   /// True while at least one timer is counting. Drives the red menu bar tint

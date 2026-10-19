@@ -19,7 +19,7 @@ struct PopoverView: View {
       if store.tasks.isEmpty {
         EmptyStateView()
       } else {
-        SearchField(query: $store.searchQuery, focus: searchFocus)
+        SearchField(query: $store.searchQuery, sortOrder: $store.sortOrder, focus: searchFocus)
 
         if store.visibleTasks.isEmpty {
           Text("No matching tasks")
@@ -50,14 +50,23 @@ struct PopoverView: View {
   /// A ScrollView + LazyVStack rather than a `List`, because `List` swallows
   /// the arrow keys for its own selection and would fight our key monitor.
   private var list: some View {
-    ScrollView {
-      LazyVStack(spacing: 2) {
-        ForEach(store.visibleTasks) { task in
-          row(for: task)
+    ScrollViewReader { proxy in
+      ScrollView {
+        LazyVStack(spacing: 2) {
+          ForEach(store.visibleTasks) { task in
+            row(for: task)
+              .id(task.id)
+          }
         }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 6)
       }
-      .padding(.horizontal, 6)
-      .padding(.vertical, 6)
+      // Keep the keyboard-selected row in view; a nil anchor scrolls only as
+      // far as needed to reveal it.
+      .onChange(of: store.selectedID) { _, id in
+        guard let id else { return }
+        proxy.scrollTo(id)
+      }
     }
     .frame(maxHeight: maxListHeight)
     // Let the popover shrink to fit a short list instead of always reserving
