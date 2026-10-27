@@ -19,6 +19,7 @@ public final class TaskStore {
   public enum SortOrder: String, CaseIterable, Identifiable {
     case alphabetically = "Alphabetically"
     case activeTask = "Active Task"
+    case longestTime = "Longest Time"
 
     public var id: String { rawValue }
   }
@@ -92,10 +93,25 @@ public final class TaskStore {
   public var visibleTasks: [TrackedTask] {
     let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
     let matching = query.isEmpty ? tasks : tasks.filter { $0.title.localizedStandardContains(query) }
-    guard sortOrder == .activeTask else { return matching }
-    return matching.sorted { lhs, rhs in
-      if lhs.running != rhs.running { return lhs.running }
-      return Self.titleOrder(lhs, rhs)
+    switch sortOrder {
+    case .alphabetically:
+      return matching
+    case .activeTask:
+      return matching.sorted { lhs, rhs in
+        if lhs.running != rhs.running { return lhs.running }
+        return Self.titleOrder(lhs, rhs)
+      }
+    case .longestTime:
+      // Ranked by time as of this read, so a running task climbs the list
+      // the next time the view re-reads it rather than every second.
+      let nowMs = now()
+      return matching
+        .map { (task: $0, seconds: elapsedSeconds($0, nowMs: nowMs)) }
+        .sorted { lhs, rhs in
+          if lhs.seconds != rhs.seconds { return lhs.seconds > rhs.seconds }
+          return Self.titleOrder(lhs.task, rhs.task)
+        }
+        .map(\.task)
     }
   }
 

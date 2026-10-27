@@ -103,4 +103,28 @@ struct TaskSortingTests {
     store.delete(a)
     #expect(store.tasks.first { $0.id == store.selectedID }?.title == "B")
   }
+
+  @Test("longest time order puts the most tracked time first, ties by title")
+  func longestTimeOrder() {
+    let (store, _) = makeStore(tasks: [
+      TrackedTask(title: "Short", seconds: 60),
+      TrackedTask(title: "Long", seconds: 3_600),
+      TrackedTask(title: "B tie", seconds: 600),
+      TrackedTask(title: "A tie", seconds: 600),
+    ])
+    store.sortOrder = .longestTime
+    #expect(store.visibleTasks.map(\.title) == ["Long", "A tie", "B tie", "Short"])
+    #expect(titles(store) == ["A tie", "B tie", "Long", "Short"])
+  }
+
+  @Test("longest time order counts a running task's live elapsed time")
+  func longestTimeCountsRunning() {
+    let (store, _) = makeStore(tasks: [
+      TrackedTask(title: "Banked", seconds: 100),
+      // Started 500s before the store's fixed now of 1_000_000 ms.
+      TrackedTask(title: "Running", seconds: 0, running: true, startedAt: 500_000),
+    ])
+    store.sortOrder = .longestTime
+    #expect(store.visibleTasks.map(\.title) == ["Running", "Banked"])
+  }
 }
