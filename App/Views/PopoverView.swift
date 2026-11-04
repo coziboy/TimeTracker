@@ -65,13 +65,27 @@ struct PopoverView: View {
       // far as needed to reveal it.
       .onChange(of: store.selectedID) { _, id in
         guard let id else { return }
-        proxy.scrollTo(id)
+        scrollTo(id, using: proxy)
+      }
+      // Adding a task selects it before SwiftUI has inserted its row. Once
+      // the editor closes, the row has its final sorted position; reveal it
+      // again so submitting a new task leaves that task in view and selected.
+      .onChange(of: store.editingID) { oldID, newID in
+        guard oldID != nil, newID == nil, let id = store.selectedID else { return }
+        scrollTo(id, using: proxy)
       }
     }
     .frame(maxHeight: maxListHeight)
     // Let the popover shrink to fit a short list instead of always reserving
     // the full height.
     .fixedSize(horizontal: false, vertical: true)
+  }
+
+  private func scrollTo(_ id: UUID, using proxy: ScrollViewProxy) {
+    // Let SwiftUI apply list insertion/reordering before resolving the target.
+    DispatchQueue.main.async {
+      proxy.scrollTo(id)
+    }
   }
 
   @ViewBuilder
