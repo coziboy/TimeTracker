@@ -128,3 +128,9 @@ struct TaskSortingTests {
     #expect(store.visibleTasks.map(\.title) == ["Running", "Banked"])
   }
 }
+
+@Test func sortOrderNextCyclesThroughAllCasesAndWraps() {
+  #expect(TaskStore.SortOrder.alphabetically.next == .activeTask)
+  #expect(TaskStore.SortOrder.activeTask.next == .longestTime)
+  #expect(TaskStore.SortOrder.longestTime.next == .alphabetically)
+}

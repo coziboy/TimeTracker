@@ -22,6 +22,13 @@ public final class TaskStore {
     case longestTime = "Longest Time"
 
     public var id: String { rawValue }
+
+    /// The order after this one, wrapping back to the first.
+    public var next: SortOrder {
+      let all = Self.allCases
+      let index = all.firstIndex(of: self)!
+      return all[(index + 1) % all.count]
+    }
   }
 
   /// Always ordered alphabetically by title; see `sortTasks()`.

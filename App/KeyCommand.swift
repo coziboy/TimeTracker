@@ -13,6 +13,7 @@ enum KeyCommand {
   case deleteSelected
   case addTask
   case focusSearch
+  case cycleSortOrder
   case closePopover
   case quit
 
@@ -33,6 +34,7 @@ enum KeyCommand {
       switch event.charactersIgnoringModifiers?.lowercased() {
       case "n": self = .addTask; return
       case "f": self = .focusSearch; return
+      case "s": self = .cycleSortOrder; return
       case "q": self = .quit; return
       default: return nil
       }

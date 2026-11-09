@@ -352,6 +352,8 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
       // The field only exists while there are tasks to search.
       guard !store.tasks.isEmpty else { return true }
       searchFocus.isFocused = true
+    case .cycleSortOrder:
+      store.sortOrder = store.sortOrder.next
     case .closePopover:
       close()
     case .quit:
